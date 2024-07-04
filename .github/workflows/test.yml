@@ -28,7 +28,7 @@ jobs:
         run: |
           echo "Yipeee"
 
-  test:
+  archive:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +47,7 @@ jobs:
           path: repo.tgz
 
   build:
-    needs: archive
+    needs: [archive]
     runs-on: ubuntu-latest
     steps:
       - name: Download tarball
