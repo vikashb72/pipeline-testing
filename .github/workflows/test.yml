@@ -22,7 +22,7 @@ jobs:
   must_run:
     needs: [ fail_test ]
     runs-on: ubuntu-latest
-    if: sucess() || failure
+    if: success() || failure()
     steps:
       - name: must fail
         run: |
