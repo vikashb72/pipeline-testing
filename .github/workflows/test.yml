@@ -12,50 +12,62 @@ on:
   workflow_dispatch:
 
 jobs:
-  fail_test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: must fail
-        run: |
-          /bin/nonexistent --wtf
-
-  must_run:
-    needs: [ fail_test ]
-    runs-on: ubuntu-latest
-    if: success() || failure()
-    steps:
-      - name: must fail
-        run: |
-          echo "Yipeee"
-
-  archive:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create tarball
-        run: |
-          mkdir -p ../dist
-          git archive --format=tar.gz -o repo.tgz \
-             --prefix=${{ github.ref_name }} ${{ github.ref_name }}
-          ls -l
-
-      - name: Upload tarball
-        uses: actions/upload-artifact@v4
-        with:
-          name: "${{ github.ref_name }}_tarball"
-          path: repo.tgz
-
   build:
-    needs: [archive]
     runs-on: ubuntu-latest
     steps:
-      - name: Download tarball
-        uses: actions/download-artifact@v4
-        with:
-          name: "${{ github.ref_name }}_tarball"
+      - uses: actions/checkout@v3
 
-      - uses: geekyeggo/delete-artifact@v5
-        with:
-          name: "{{ github.ref_name }}_tarball"
+      - uses: actions/setup-node@v3
+        node-version: 22
 
+      - run: npm install
+
+
+
+#  fail_test:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: must fail
+#        run: |
+#          /bin/nonexistent --wtf
+#
+#  must_run:
+#    needs: [ fail_test ]
+#    runs-on: ubuntu-latest
+#    if: success() || failure()
+#    steps:
+#      - name: must fail
+#        run: |
+#          echo "Yipeee"
+#
+#  archive:
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v4
+#
+#      - name: Create tarball
+#        run: |
+#          mkdir -p ../dist
+#          git archive --format=tar.gz -o repo.tgz \
+#             --prefix=${{ github.ref_name }} ${{ github.ref_name }}
+#          ls -l
+#
+#      - name: Upload tarball
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: "${{ github.ref_name }}_tarball"
+#          path: repo.tgz
+#
+#  build:
+#    needs: [archive]
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Download tarball
+#        uses: actions/download-artifact@v4
+#        with:
+#          name: "${{ github.ref_name }}_tarball"
+#
+#      - uses: geekyeggo/delete-artifact@v5
+#        with:
+#          name: "{{ github.ref_name }}_tarball"
+#

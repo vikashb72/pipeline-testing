@@ -1,3 +1,6 @@
-FROM hello-world:latest
+FROM node:latest as build
 
-ENV DEBUG=false
+WORKDIR /app
+COPY package*.json .
+RUN npm install
+COPY . .
