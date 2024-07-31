@@ -1,0 +1,201 @@
+name: Test 2
+
+on:
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  push:
+    branches: [ "develop" ]
+  pull_request:
+    branches: [ "develop" ]
+
+env:
+  BRANCH_NAME: ${{ github.base_ref || github.ref_name }} 
+
+jobs:
+
+  # Will run with each workflow run
+  determine_build_env:
+    runs-on: ubuntu-latest
+    outputs:
+      manual_pipeline_run: ${{ steps.determine_build_source.outputs.manual_pipeline_run }}
+      pull_request_build: ${{ steps.determine_build_source.outputs.pull_request_build }}
+      deployment_build: ${{ steps.determine_build_source.outputs.deployment_build }}
+      build_env_name: ${{ steps.determine_build_env.outputs.build_env_name }}
+      run_tests: ${{ steps.determine_build_source.outputs.run_tests }}
+      build_image: ${{ steps.determine_build_source.outputs.build_image }}
+    steps:
+      - shell: bash
+        name: Determine build source
+        id: determine_build_source
+        run: |
+          BUILD_REASON="${{ github.event_name }}"
+          echo "The event that triggered the pipeline --- $BUILD_REASON"
+
+          RUN_TESTS=0
+          BUILD_ALL=0
+          
+          if [ "$BUILD_REASON" = "workflow_dispatch" ]; then
+              echo "This is a manual pipeline run"
+              echo "manual_pipeline_run=1" >> $GITHUB_OUTPUT
+              RUN_TESTS=1
+              BUILD_ALL=1
+          else
+              echo "manual_pipeline_run=0" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "$BUILD_REASON" = "pull_request" ]; then
+              echo "This is a pull request build"
+              echo "pull_request_build=1" >> $GITHUB_OUTPUT
+              RUN_TESTS=1
+              if [ "${{ github.base_ref }}" != "main" ]; then
+                 echo "merging to ${{ github.base_ref }}"
+                 BUILD_ALL=1
+              fi
+          else
+              echo "pull_request_build=0" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "$BUILD_REASON" = "push" ]; then
+              echo "This is a push deployment build"
+              echo "deployment_build=1" >> $GITHUB_OUTPUT
+              RUN_TESTS=1
+          else
+              echo "deployment_build=0" >> $GITHUB_OUTPUT
+          fi
+
+          echo "run_tests=${RUN_TESTS}" >> $GITHUB_OUTPUT
+          echo "build_image=${BUILD_ALL}" >> $GITHUB_OUTPUT
+
+          echo "github.base_ref: ${{ github.base_ref }}"
+          echo "merged: ${{ github.event.pull_request.merged }}"
+          echo "event: ${{ github.event_name }}"
+          echo "event action: ${{ github.event.action }}"
+
+      - shell: bash
+        name: Determine build env
+        id: determine_build_env
+        run: |
+          # Determine env name
+          env_name='development'
+          echo "build_env_name=$env_name" >> $GITHUB_OUTPUT
+          BRANCH_NAME="${{ github.ref_name }}"
+          if [ "$BRANCH_NAME" != "staging" ] && [ "$BRANCH_NAME" != "main" ]; then
+              echo "build_env_name='dev'" >> $GITHUB_OUTPUT
+            echo "This is a dev build. Setting $env_name as build name for all branches except staging and main"
+          fi
+
+          if [ "$BRANCH_NAME" = "staging" ]; then
+              echo "This is a $BRANCH_NAME build"
+              echo "build_env_name='staging'" >> $GITHUB_OUTPUT
+          fi
+
+          if [ "$BRANCH_NAME" = "main" ]; then
+              echo "This is a $BRANCH_NAME build"
+              echo "build_env_name='production'" >> $GITHUB_OUTPUT
+          fi
+
+  # Will run only on feature branches (Build Step)
+  nx_tests:
+    environment: iss.titan.ui
+    runs-on: ubuntu-latest
+    needs: [ determine_build_env ]
+    #if: ${{ needs.determine_build_env.outputs.run_tests == 1 }}
+    if: needs.determine_build_env.outputs.manual_pipeline_run == 1 ||
+      needs.determine_build_env.outputs.pull_request_build == 1
+    steps:
+      - name: Debug
+        run: |
+          echo "manual_pipeline_run = ${{ needs.determine_build_env.outputs.manual_pipeline_run }}"
+          echo "pull_request_build = ${{ needs.determine_build_env.outputs.pull_request_build }}"
+          echo "deployment_build = ${{ needs.determine_build_env.outputs.deployment_build }}"
+          echo "run_tests = ${{ needs.determine_build_env.outputs.run_tests }}"
+        shell: bash
+
+  # Will run only on feature branches (Build Step)
+  e2e_tests:
+    runs-on: ubuntu-latest
+    needs: [ determine_build_env, nx_tests ]
+    #if: ${{ needs.determine_build_env.outputs.run_tests == 1 }}
+    if: needs.determine_build_env.outputs.manual_pipeline_run == 1 ||
+      needs.determine_build_env.outputs.pull_request_build == 1
+    steps:
+      - name: Debug
+        run: |
+          echo "manual_pipeline_run = ${{ needs.determine_build_env.outputs.manual_pipeline_run }}"
+          echo "pull_request_build = ${{ needs.determine_build_env.outputs.pull_request_build }}"
+          echo "deployment_build = ${{ needs.determine_build_env.outputs.deployment_build }}"
+        shell: bash
+
+  create_artifact:
+    environment: iss.titan.ui
+    needs: [ determine_build_env ]
+    runs-on: ubuntu-latest
+    if: needs.determine_build_env.outputs.manual_pipeline_run == 1 ||
+      needs.determine_build_env.outputs.deployment_build == 1
+    #if: github.event.pull_request.merged == true 
+    steps:
+      - name: Debug
+        run: |
+          echo "manual_pipeline_run = ${{ needs.determine_build_env.outputs.manual_pipeline_run }}"
+          echo "pull_request_build = ${{ needs.determine_build_env.outputs.pull_request_build }}"
+          echo "deployment_build = ${{ needs.determine_build_env.outputs.deployment_build }}"
+
+  kaniko_build_and_push:
+    needs: [ determine_build_env, create_artifact ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build images
+        run: |
+          echo "deployment_build = ${{ needs.determine_build_env.outputs.deployment_build }}"
+          echo "manual_pipeline_run = ${{ needs.determine_build_env.outputs.manual_pipeline_run }}"
+          echo "merged = ${{ github.event.pull_request.merged }}"
+          echo "deployment_build = ${{ needs.determine_build_env.outputs.deployment_build }}"
+
+  update_deployment:
+    environment: iss.titan.ui
+    needs: [ determine_build_env, kaniko_build_and_push ]
+    #if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Debug
+        run: |
+          echo "deployment_build = ${{ needs.determine_build_env.outputs.deployment_build }}"
+          echo "manual_pipeline_run = ${{ needs.determine_build_env.outputs.manual_pipeline_run }}"
+          echo "merged = ${{ github.event.pull_request.merged }}"
+          echo "deployment_build = ${{ needs.determine_build_env.outputs.deployment_build }}"
+
+          MAJOR=$(awk -F '.' '{ print $1 }' VERSION.TXT)
+          MINOR=$(awk -F '.' '{ print $2 }' VERSION.TXT)
+          PATCH=$(awk -F '.' '{ print $3 }' VERSION.TXT)
+
+          PATCH=$((PATCH+1))
+
+          if [ -f MINOR.TXT ]; then
+              rm -f MINOR.TXT
+              MINOR=$((MINOR+1))
+              PATCH=0
+          fi
+
+          if [ -f MAJOR.TXT ]; then
+              rm -f MAJOR.TXT
+              MAJOR=$((MAJOR+1))
+              MINOR=0
+              PATCH=0
+          fi
+
+          echo "${MAJOR}.${MINOR}.${PATCH}" > VERSION.TXT
+          git add VERSION.TXT
+
+  clean_up:
+    environment: iss.titan.ui
+    needs: [ determine_build_env, create_artifact, kaniko_build_and_push ]
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - name: Remove artifact
+        run: |
+          echo "deployment_build = ${{ needs.determine_build_env.outputs.deployment_build }}"
+          echo "manual_pipeline_run = ${{ needs.determine_build_env.outputs.manual_pipeline_run }}"
+          echo "merged = ${{ github.event.pull_request.merged }}"
+          echo "Cleaning up"
+
