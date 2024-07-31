@@ -167,6 +167,9 @@ jobs:
           echo "merged = ${{ github.event.pull_request.merged }}"
           echo "deployment_build = ${{ needs.determine_build_env.outputs.deployment_build }}"
 
+          ls -l 
+          pwd
+
           MAJOR=$(awk -F '.' '{ print $1 }' VERSION.TXT)
           MINOR=$(awk -F '.' '{ print $2 }' VERSION.TXT)
           PATCH=$(awk -F '.' '{ print $3 }' VERSION.TXT)
