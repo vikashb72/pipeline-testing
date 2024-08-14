@@ -15,8 +15,6 @@
     "ag-grid-enterprise": "^32.0.2",
     "ag-grid-react": "^32.0.2",
     "allotment": "^1.19.3",
-    "axios": "^1.6.0",
-    "axios-retry": "^4.1.0",
     "cidr-regex": "^4.0.3",
     "clone": "^2.1.2",
     "date-fns": "^2.30.0",
